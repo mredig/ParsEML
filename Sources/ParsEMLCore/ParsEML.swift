@@ -1,11 +1,46 @@
 import Foundation
 
+fileprivate extension UInt8 {
+	static let crChar: UInt8 = 0x0D
+	static let lfChar: UInt8 = 0x0A
+}
 
 public struct EMLFile {
-	public struct Header {
-		enum HeaderError: Error {
-			case invalidStringData
+	public let header: Header
+	public let body: Body?
+
+	private static let newlines = CharacterSet(arrayLiteral: .init(.crChar), .init(.lfChar))
+
+	public init(from file: URL) throws {
+		let fileData = try Data(contentsOf: file)
+
+		var lastChar: UInt8 = 0
+		var headerSeparationIndex = fileData.count
+		for index in fileData.indices {
+			let thisChar = fileData[index]
+			defer { lastChar = thisChar }
+			guard Self.newlines.contains(.init(thisChar)) else {
+				continue
+			}
+
+			if Self.newlines.contains(.init(thisChar)) {
+				if lastChar == .lfChar {
+					headerSeparationIndex = index
+					break
+				}
+			}
 		}
+
+		header = try Header(data: fileData[0..<headerSeparationIndex])
+		body = try Body(data: fileData[headerSeparationIndex...])
+	}
+
+
+	enum EMLError: Error {
+		case invalidStringData
+	}
+
+	public struct Header {
 
 		private var headerPairs: [String: String]
 
@@ -19,7 +54,7 @@ public struct EMLFile {
 
 		public init(data: Data) throws {
 			guard let string = String(data: data, encoding: .utf8) else {
-				throw HeaderError.invalidStringData
+				throw EMLError.invalidStringData
 			}
 			self.init(rawString: string)
 		}
@@ -79,8 +114,19 @@ public struct EMLFile {
 		}
 	}
 
-	struct Body {
+	public struct Body {
+		public let body: String
 
+		init(data: Data) throws {
+			guard let str = String(data: data, encoding: .utf8) else {
+				throw EMLError.invalidStringData
+			}
+			self.body = str
+		}
+
+		init(body: String) {
+			self.body = body
+		}
 	}
 
 
